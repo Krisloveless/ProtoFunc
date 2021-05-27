@@ -7,7 +7,7 @@
 
 using namespace std;
 // Tensorflow NHWC
-vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *ksize, int *stride, int *rate, const vector<int> &input_dims, string padding_type);
+vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *ksize, int *stride, int *rate, int *input_dims, string padding_type);
 
 ostream &
 operator<<(ostream &os, vector<int> &v)
@@ -53,17 +53,16 @@ int main()
         input.push_back(i);
     }
     int output_shape = 3 * 2 * 2 * 32;
-    vector<int> input_dims = {3, 10, 10, 2};
+    int input_dims[] = {3, 10, 10, 2};
     int ksize[] = {4, 4};
     int stride[] = {7, 7};
     int rate[] = {3, 3};
     auto output = ExtractImagePatch(input, output_shape, ksize, stride, rate, input_dims, "SAME");
     cout << input[540] << endl;
     cout << output[330] << endl;
-
 }
 
-vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *ksize, int *stride, int *rate, const vector<int> &input_dims, string padding_type)
+vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *ksize, int *stride, int *rate, int *input_dims, string padding_type)
 {
 
     int inputDepth = input_dims[3];
@@ -83,7 +82,7 @@ vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *k
     int outputCols = 0;
     int rowPaddingTop = 0;
     int colPaddingLeft = 0;
-    
+
     if (padding_type == "VALID")
     {
         outputRows = ceil((inputRowSize - patch_rows_eff + 1.f) / static_cast<float>(row_strides));
@@ -97,7 +96,6 @@ vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *k
         outputCols = ceil(inputColSize / static_cast<float>(col_strides));
         rowPaddingTop = ((outputRows - 1) * row_strides + patch_rows_eff - inputRowSize) / 2;
         colPaddingLeft = ((outputCols - 1) * col_strides + patch_cols_eff - inputColSize) / 2;
-
     }
 
     int rowStride = ksize_col;
@@ -122,9 +120,7 @@ vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *k
 
         int rowIndex = patchIndex / outputCols;
         int rowOffset = patchOffset / rowStride;
-
         int inputRow = rowIndex * row_strides + rowOffset * row_rate - rowPaddingTop;
-
         if (inputRow < 0 || inputRow >= inputRowSize)
         {
             output[i] = 0;
@@ -133,13 +129,13 @@ vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *k
 
         int colIndex = patchIndex - rowIndex * outputCols;
         int colOffset = patchOffset - rowOffset * rowStride;
-
         int inputCol = colIndex * col_strides + colOffset * col_rate - colPaddingLeft;
         if (inputCol < 0 || inputCol >= inputColSize)
         {
             output[i] = 0;
             continue;
         }
+
         int depth = innerIndex - (innerIndex / OutputDepth) * OutputDepth;
         int inputIndex = depth + inputCol * colInputStride + inputRow * rowInputStride + batchIndex * patchInputStride;
         output[i] = input[inputIndex];
