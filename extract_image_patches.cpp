@@ -6,8 +6,8 @@
 #include <algorithm>
 
 using namespace std;
-// Tensorflow NHWC 
-vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int ksize, int stride, int rate, const vector<int> &input_dims, string padding_type);
+// Tensorflow NHWC
+vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *ksize, int *stride, int *rate, const vector<int> &input_dims, string padding_type);
 
 ostream &
 operator<<(ostream &os, vector<int> &v)
@@ -48,105 +48,100 @@ operator<<(ostream &os, vector<vector<int>> &v)
 int main()
 {
     vector<int> input;
-
-    for (int i = 1; i < 101; i++)
+    for (int i = 0; i < 600; i++)
     {
         input.push_back(i);
     }
-    int output_shape = 4 * 16;
-    vector<int> input_dims = {1, 10, 10, 1};
+    int output_shape = 3 * 2 * 2 * 32;
+    vector<int> input_dims = {3, 10, 10, 2};
+    int ksize[] = {4, 4};
+    int stride[] = {7, 7};
+    int rate[] = {3, 3};
+    auto output = ExtractImagePatch(input, output_shape, ksize, stride, rate, input_dims, "SAME");
+    cout << input[540] << endl;
+    cout << output[330] << endl;
 
-    auto output = ExtractImagePatch(input, output_shape, 4, 7, 1, input_dims, "SAME");
-    cout << output << endl;
 }
 
-vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int ksize, int stride, int rate, const vector<int> &input_dims, string padding_type)
+vector<int> ExtractImagePatch(const vector<int> &input, int output_shape, int *ksize, int *stride, int *rate, const vector<int> &input_dims, string padding_type)
 {
 
-    int m_inputDepth = input_dims[3];
-    int m_inputRows = input_dims[2];
-    int m_inputCols = input_dims[1];
-    int ksize_col = ksize;
-    int ksize_row = ksize;
-   
-    int m_in_row_strides = rate;
-    int m_in_col_strides = rate;
+    int inputDepth = input_dims[3];
+    int inputRowSize = input_dims[2];
+    int inputColSize = input_dims[1];
+    int ksize_row = ksize[0];
+    int ksize_col = ksize[1];
+    int row_rate = rate[0];
+    int col_rate = rate[1];
+    int row_strides = stride[0];
+    int col_strides = stride[1];
 
-    int m_col_strides = stride;
-    int m_row_strides = stride;
+    int patch_rows_eff = ksize_row + (ksize_row - 1) * (row_rate - 1);
+    int patch_cols_eff = ksize_col + (ksize_col - 1) * (col_rate - 1);
 
-    int m_row_inflate_strides = 1;
-    int m_col_inflate_strides = 1;
-
-    int m_input_rows_eff = (m_inputRows - 1) * m_row_inflate_strides + 1;
-    int m_input_cols_eff = (m_inputCols - 1) * m_col_inflate_strides + 1;
-    int m_patch_rows_eff = ksize_row + (ksize_row - 1) * (m_in_row_strides - 1);
-    int m_patch_cols_eff = ksize_col + (ksize_col - 1) * (m_in_col_strides - 1);
-    int m_outputRows = 0;
-    int m_outputCols = 0;
-    int m_rowPaddingTop = 0;
-    int m_colPaddingLeft = 0;
+    int outputRows = 0;
+    int outputCols = 0;
+    int rowPaddingTop = 0;
+    int colPaddingLeft = 0;
+    
     if (padding_type == "VALID")
     {
-        m_outputRows = ceil((m_input_rows_eff - m_patch_rows_eff + 1.f) / static_cast<float>(m_row_strides));
-        m_outputCols = ceil((m_input_cols_eff - m_patch_cols_eff + 1.f) / static_cast<float>(m_col_strides));
-        m_rowPaddingTop = max(0, ((m_outputRows - 1) * m_row_strides + m_patch_rows_eff - m_input_rows_eff) / 2);
-        m_colPaddingLeft = max(0, ((m_outputCols - 1) * m_col_strides + m_patch_cols_eff - m_input_cols_eff) / 2);
+        outputRows = ceil((inputRowSize - patch_rows_eff + 1.f) / static_cast<float>(row_strides));
+        outputCols = ceil((inputColSize - patch_cols_eff + 1.f) / static_cast<float>(col_strides));
+        rowPaddingTop = max(0, ((outputRows - 1) * row_strides + patch_rows_eff - inputRowSize) / 2);
+        colPaddingLeft = max(0, ((outputCols - 1) * col_strides + patch_cols_eff - inputColSize) / 2);
     }
     else
     {
-        m_outputRows = ceil(m_input_rows_eff / static_cast<float>(m_row_strides));
-        m_outputCols = ceil(m_input_cols_eff / static_cast<float>(m_col_strides));
-        m_rowPaddingTop = ((m_outputRows - 1) * m_row_strides + m_patch_rows_eff - m_input_rows_eff) / 2;
-        m_colPaddingLeft = ((m_outputCols - 1) * m_col_strides + m_patch_cols_eff - m_input_cols_eff) / 2;
+        outputRows = ceil(inputRowSize / static_cast<float>(row_strides));
+        outputCols = ceil(inputColSize / static_cast<float>(col_strides));
+        rowPaddingTop = ((outputRows - 1) * row_strides + patch_rows_eff - inputRowSize) / 2;
+        colPaddingLeft = ((outputCols - 1) * col_strides + patch_cols_eff - inputColSize) / 2;
+
     }
-    int m_dimensions[4];
-    m_dimensions[0] = input_dims[3];
-    m_dimensions[1] = ksize_row;
-    m_dimensions[2] = ksize_col;
-    m_dimensions[3] = m_outputRows * m_outputCols;
 
-    int m_colStride = m_dimensions[1];
-    int m_patchStride = m_colStride * m_dimensions[2] * m_dimensions[0];
-    int m_otherStride = m_patchStride * m_dimensions[3];
+    int rowStride = ksize_col;
+    int patchStride = rowStride * ksize_row * inputDepth;
+    int otherStride = patchStride * outputRows * outputCols;
 
-    int m_rowInputStride = m_inputDepth;
-    int m_colInputStride = m_inputDepth * m_inputRows;
-    int m_patchInputStride = m_inputDepth * m_inputRows * m_inputCols;
-    int m_fastOutputDepth = m_dimensions[0];
+    int colInputStride = inputDepth;
+    int rowInputStride = inputDepth * inputColSize;
+    int patchInputStride = inputDepth * inputColSize * inputRowSize;
+    int OutputDepth = inputDepth;
 
     vector<int> output(output_shape, 0);
-    int needBatch = (output.size() - 1) / m_otherStride;
+    int needBatch = (output.size() - 1) / otherStride;
+
     for (int i = 0; i < output.size(); i++)
     {
-        int batchIndex = needBatch ? (i / m_otherStride) : 0;
-        int innerIndex = needBatch ? (i - batchIndex * m_otherStride) : i;
+        int batchIndex = needBatch ? (i / otherStride) : 0;
+        int innerIndex = needBatch ? (i - batchIndex * otherStride) : i;
         // inner index
-        int patchIndex = innerIndex / m_patchStride;
-        int patchOffset = (innerIndex - patchIndex * m_patchStride) / m_fastOutputDepth;
+        int patchIndex = innerIndex / patchStride;
+        int patchOffset = (innerIndex - patchIndex * patchStride) / OutputDepth;
 
-        int colIndex = patchIndex / m_outputRows;
-        int colOffset = patchOffset / m_colStride;
+        int rowIndex = patchIndex / outputCols;
+        int rowOffset = patchOffset / rowStride;
 
-        int inputCol = colIndex * m_col_strides + colOffset * m_in_col_strides - m_colPaddingLeft;
-        if (inputCol < 0 || inputCol >= m_input_cols_eff)
+        int inputRow = rowIndex * row_strides + rowOffset * row_rate - rowPaddingTop;
+
+        if (inputRow < 0 || inputRow >= inputRowSize)
         {
             output[i] = 0;
             continue;
         }
 
-        int rowIndex = patchIndex - colIndex * m_outputRows;
-        int rowOffset = patchOffset - colOffset * m_colStride;
+        int colIndex = patchIndex - rowIndex * outputCols;
+        int colOffset = patchOffset - rowOffset * rowStride;
 
-        int inputRow = rowIndex * m_row_strides + rowOffset * m_in_row_strides - m_rowPaddingTop;
-        if (inputRow < 0 || inputRow >= m_input_rows_eff)
+        int inputCol = colIndex * col_strides + colOffset * col_rate - colPaddingLeft;
+        if (inputCol < 0 || inputCol >= inputColSize)
         {
             output[i] = 0;
             continue;
         }
-        int depth = innerIndex - (innerIndex / m_fastOutputDepth) * m_fastOutputDepth;
-
-        int inputIndex = depth + inputRow * m_rowInputStride + inputCol * m_colInputStride + batchIndex * m_patchInputStride;
+        int depth = innerIndex - (innerIndex / OutputDepth) * OutputDepth;
+        int inputIndex = depth + inputCol * colInputStride + inputRow * rowInputStride + batchIndex * patchInputStride;
         output[i] = input[inputIndex];
     }
     return output;
