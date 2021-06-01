@@ -60,8 +60,9 @@ vector<int> ExtractImagePatch(const vector<int> &input, int output_shape,
                               int *ksize, int *stride, int *rate,
                               int *input_dims, string padding_type) {
     int inputDepth = input_dims[3];
-    int inputRowSize = input_dims[2];
-    int inputColSize = input_dims[1];
+    int inputColSize = input_dims[2];
+    int inputRowSize = input_dims[1];
+
     int ksize_row = ksize[0];
     int ksize_col = ksize[1];
     int row_rate = rate[0];
